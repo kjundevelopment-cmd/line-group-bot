@@ -8,7 +8,7 @@
 // `npm run tail` (wrangler tail) 로 실시간 로그를 보면
 // "[event] message userId = Uxxxxxxxx..." 형태로 출력됩니다.
 export const ADMIN_USER_IDS = [
-  // 'U1234567890abcdef1234567890abcdef',
+  // 'Ud1708743a23b5963b55f02664868c9f9',
   // 'Uabcdef1234567890abcdef1234567890',
 ];
 
