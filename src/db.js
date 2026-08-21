@@ -39,3 +39,15 @@ export async function getDailyStats(env, groupId, date) {
     .all();
   return results;
 }
+
+/**
+ * 특정 그룹에서 특정 유저의 집계 기록을 전부 삭제한다.
+ * (그룹방을 나간 사람을 통계/순위 목록에서 완전히 제외하기 위함)
+ */
+export async function deleteUserCounts(env, groupId, userId) {
+  await env.DB.prepare(
+    `DELETE FROM daily_counts WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .run();
+}
