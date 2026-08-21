@@ -7,4 +7,4 @@ compatibility_date = "2026-08-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "line-group-bot-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "d190bf3c-785c-4025-83b0-dcc648e0281b"
