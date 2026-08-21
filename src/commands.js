@@ -1,0 +1,69 @@
+import { ADMIN_USER_IDS, RANKING_TOP_N } from './config.js';
+import { todayKST } from './date.js';
+import * as db from './db.js';
+
+export function isAdmin(userId) {
+  return ADMIN_USER_IDS.includes(userId);
+}
+
+function formatStats(rows) {
+  if (rows.length === 0) return '오늘 집계된 대화가 아직 없습니다.';
+  return rows
+    .map((r) => `${r.display_name || r.user_id} : ${r.message_count}마디`)
+    .join('\n');
+}
+
+function formatRanking(rows, topN) {
+  if (rows.length === 0) return '오늘 집계된 대화가 아직 없습니다.';
+  const medal = ['🥇', '🥈', '🥉'];
+  return rows
+    .slice(0, topN)
+    .map((r, i) => `${medal[i] || `${i + 1}위`} ${r.display_name || r.user_id} - ${r.message_count}마디`)
+    .join('\n');
+}
+
+/**
+ * 텍스트가 !통계/?통계/!메인방/?메인방/!순위/?순위 중 하나인지 판별
+ * @returns {string|null} '통계' | '메인방' | '순위' | null
+ */
+export function matchCommand(text) {
+  const m = text.trim().match(/^[!?](통계|메인방|순위)$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * 명령을 처리하고 회신할 텍스트를 반환한다. (null이면 회신 없음)
+ */
+export async function handleCommand(command, event, env) {
+  const source = event.source;
+  const userId = source.userId;
+
+  if (command === '메인방') {
+    if (source.type !== 'group') {
+      return '그룹방에서만 메인방으로 지정할 수 있어요.';
+    }
+    if (!isAdmin(userId)) {
+      return '이 명령을 사용할 권한이 없습니다.';
+    }
+    await db.setMainRoomId(env, source.groupId);
+    return '이 방을 메인방으로 지정했어요. 지금부터 이 방의 대화를 집계합니다.';
+  }
+
+  const mainRoomId = await db.getMainRoomId(env);
+  if (!mainRoomId) {
+    return '아직 메인방이 지정되지 않았어요. 메인방에서 !메인방 을 입력해주세요.';
+  }
+
+  const date = todayKST();
+  const rows = await db.getDailyStats(env, mainRoomId, date);
+
+  if (command === '통계') {
+    return `[오늘의 마디수 통계]\n${formatStats(rows)}`;
+  }
+
+  if (command === '순위') {
+    return `[오늘의 마디수 순위]\n${formatRanking(rows, RANKING_TOP_N)}`;
+  }
+
+  return null;
+}

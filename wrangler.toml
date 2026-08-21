@@ -1,0 +1,10 @@
+name = "line-group-bot"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# wrangler d1 create line-group-bot-db 실행 후 출력되는 database_id를
+# 아래 database_id 값에 붙여넣으세요. (README 2단계 참고)
+[[d1_databases]]
+binding = "DB"
+database_name = "line-group-bot-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
