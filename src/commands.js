@@ -41,12 +41,14 @@ export async function handleCommand(matched, event, env) {
   const source = event.source;
   const userId = source.userId;
 
+  // 통계/순위/메인방 전부 관리자만 사용 가능
+  if (!isAdmin(userId)) {
+    return null; // 관리자가 아니면 조용히 무시 (권한 없음을 노출하지 않음)
+  }
+
   if (command === '메인방') {
     if (source.type !== 'group') {
       return '그룹방에서만 메인방으로 지정할 수 있어요.';
-    }
-    if (!isAdmin(userId)) {
-      return '이 명령을 사용할 권한이 없습니다.';
     }
     await db.setMainRoomId(env, prefix, source.groupId);
     return `이 방을 '${prefix}' 명령어 전용 메인방으로 지정했어요. 지금부터 이 방의 대화를 집계합니다.`;
