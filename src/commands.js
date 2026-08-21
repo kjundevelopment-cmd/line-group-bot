@@ -23,18 +23,21 @@ function formatRanking(rows, topN) {
 }
 
 /**
- * 텍스트가 !통계/?통계/!메인방/?메인방/!순위/?순위 중 하나인지 판별
- * @returns {string|null} '통계' | '메인방' | '순위' | null
+ * 텍스트가 !통계/!메인방/!순위/?통계/?메인방/?순위 중 하나인지 판별.
+ * '!'와 '?'는 서로 완전히 독립된 메인방을 가리키는 별개의 명령 체계다.
+ * @returns {{prefix: '!'|'?', command: '통계'|'메인방'|'순위'} | null}
  */
 export function matchCommand(text) {
-  const m = text.trim().match(/^[!?](통계|메인방|순위)$/);
-  return m ? m[1] : null;
+  const m = text.trim().match(/^([!?])(통계|메인방|순위)$/);
+  if (!m) return null;
+  return { prefix: m[1], command: m[2] };
 }
 
 /**
  * 명령을 처리하고 회신할 텍스트를 반환한다. (null이면 회신 없음)
  */
-export async function handleCommand(command, event, env) {
+export async function handleCommand(matched, event, env) {
+  const { prefix, command } = matched;
   const source = event.source;
   const userId = source.userId;
 
@@ -45,18 +48,18 @@ export async function handleCommand(command, event, env) {
     if (!isAdmin(userId)) {
       return '이 명령을 사용할 권한이 없습니다.';
     }
-    await db.setMainRoomId(env, source.groupId);
-    return '이 방을 메인방으로 지정했어요. 지금부터 이 방의 대화를 집계합니다.';
+    await db.setMainRoomId(env, prefix, source.groupId);
+    return `이 방을 '${prefix}' 명령어 전용 메인방으로 지정했어요. 지금부터 이 방의 대화를 집계합니다.`;
   }
 
-  const mainRoomId = await db.getMainRoomId(env);
+  const mainRoomId = await db.getMainRoomId(env, prefix);
   if (!mainRoomId) {
-    return '아직 메인방이 지정되지 않았어요. 메인방에서 !메인방 을 입력해주세요.';
+    return `아직 '${prefix}' 명령어용 메인방이 지정되지 않았어요. 해당 방에서 ${prefix}메인방 을 입력해주세요.`;
   }
 
-  // 통계/순위는 메인방으로 지정된 방에서만 조회할 수 있음
+  // 통계/순위는 그 프리픽스의 메인방으로 지정된 방에서만 조회할 수 있음
   if (source.type !== 'group' || source.groupId !== mainRoomId) {
-    return null; // 메인방이 아니면 아무 반응도 하지 않음
+    return null; // 지정된 방이 아니면 아무 반응도 하지 않음
   }
 
   const date = todayKST();
