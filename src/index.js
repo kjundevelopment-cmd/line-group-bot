@@ -44,20 +44,25 @@ async function handleEvent(event, env) {
   }
 
   const text = event.message.text;
-  const command = matchCommand(text);
+  const matched = matchCommand(text);
 
-  if (command) {
-    const replyText = await handleCommand(command, event, env);
+  if (matched) {
+    const replyText = await handleCommand(matched, event, env);
     if (replyText) {
       await replyMessage(env, event.replyToken, replyText);
     }
     return;
   }
 
-  // 일반 메시지 → 마디(어절) 수 계산 후 메인방 집계에 반영
-  const mainRoomId = await getMainRoomId(env);
-  if (!mainRoomId || source.groupId !== mainRoomId) {
-    return; // 메인방으로 지정되지 않은 방은 집계하지 않음
+  // 일반 메시지 → 마디(어절) 수 계산 후, 이 방이 !메인방 또는 ?메인방으로
+  // 지정된 방이라면 그에 맞는 집계에 반영한다.
+  const bangMainRoomId = await getMainRoomId(env, '!');
+  const questionMainRoomId = await getMainRoomId(env, '?');
+
+  const isMonitoredRoom =
+    source.groupId === bangMainRoomId || source.groupId === questionMainRoomId;
+  if (!isMonitoredRoom) {
+    return; // 어느 쪽 메인방으로도 지정되지 않은 방은 집계하지 않음
   }
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
