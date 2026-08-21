@@ -42,7 +42,9 @@ export async function handleCommand(matched, event, env) {
   const userId = source.userId;
 
   // 통계/순위/메인방 전부 관리자만 사용 가능
-  if (!isAdmin(userId)) {
+  const adminCheck = isAdmin(userId);
+  console.log('[debug] handleCommand userId =', userId, 'isAdmin =', adminCheck, 'ADMIN_USER_IDS =', JSON.stringify(ADMIN_USER_IDS));
+  if (!adminCheck) {
     return null; // 관리자가 아니면 조용히 무시 (권한 없음을 노출하지 않음)
   }
 
@@ -59,9 +61,12 @@ export async function handleCommand(matched, event, env) {
     return `아직 '${prefix}' 명령어용 메인방이 지정되지 않았어요. 해당 방에서 ${prefix}메인방 을 입력해주세요.`;
   }
 
-  // 통계/순위는 그 프리픽스의 메인방으로 지정된 방에서만 조회할 수 있음
-  if (source.type !== 'group' || source.groupId !== mainRoomId) {
-    return null; // 지정된 방이 아니면 아무 반응도 하지 않음
+  // 통계/순위는 그 프리픽스의 메인방으로 지정된 방이거나,
+  // (이미 위에서 관리자 확인이 끝났으므로) 관리자의 1:1 DM에서 조회할 수 있음
+  const inMainRoom = source.type === 'group' && source.groupId === mainRoomId;
+  const isDirectMessage = source.type === 'user';
+  if (!inMainRoom && !isDirectMessage) {
+    return null; // 메인방도 아니고 1:1 DM도 아니면 아무 반응도 하지 않음
   }
 
   const date = todayKST();
