@@ -1,16 +1,18 @@
-export async function getMainRoomId(env) {
+export async function getMainRoomId(env, prefix) {
+  const key = `mainRoomId:${prefix}`;
   const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?')
-    .bind('mainRoomId')
+    .bind(key)
     .first();
   return row ? row.value : null;
 }
 
-export async function setMainRoomId(env, groupId) {
+export async function setMainRoomId(env, prefix, groupId) {
+  const key = `mainRoomId:${prefix}`;
   await env.DB.prepare(
-    `INSERT INTO settings (key, value) VALUES ('mainRoomId', ?)
+    `INSERT INTO settings (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   )
-    .bind(groupId)
+    .bind(key, groupId)
     .run();
 }
 
