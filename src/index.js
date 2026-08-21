@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { validateSignature, replyMessage, getGroupMemberDisplayName } from './line.js';
 import { matchCommand, handleCommand } from './commands.js';
-import { getMainRoomId, incrementCount } from './db.js';
+import { getMainRoomId, incrementCount, deleteUserCounts } from './db.js';
 import { todayKST } from './date.js';
 import { MIN_CHAR_COUNT } from './config.js';
 
@@ -31,6 +31,21 @@ app.post('/webhook', async (c) => {
 async function handleEvent(event, env) {
   if (event.source && event.source.userId) {
     console.log('[event]', event.type, 'userId =', event.source.userId, 'source =', event.source.type);
+  }
+
+  // 그룹방 멤버가 나가면 그 사람의 집계 기록을 통계/순위 목록에서 완전히 제거한다.
+  if (event.type === 'memberLeft') {
+    const groupId = event.source && event.source.groupId;
+    const leftMembers = (event.left && event.left.members) || [];
+    console.log('[debug] memberLeft groupId =', groupId, 'members =', JSON.stringify(leftMembers));
+    if (groupId && leftMembers.length > 0) {
+      await Promise.all(
+        leftMembers
+          .filter((m) => m.userId)
+          .map((m) => deleteUserCounts(env, groupId, m.userId))
+      );
+    }
+    return;
   }
 
   if (event.type !== 'message' || event.message.type !== 'text') {
