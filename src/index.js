@@ -38,21 +38,24 @@ async function handleEvent(event, env) {
   }
 
   const source = event.source;
-  // 그룹방 활동 집계가 목적이므로 그룹 메시지만 처리
-  if (source.type !== 'group') {
-    return;
-  }
-
   const text = event.message.text;
   const matched = matchCommand(text);
-  console.log('[debug] text =', JSON.stringify(text), 'matched =', JSON.stringify(matched), 'groupId =', source.groupId);
+  console.log('[debug] text =', JSON.stringify(text), 'matched =', JSON.stringify(matched), 'source.type =', source.type);
 
   if (matched) {
+    // 통계/순위/메인방 명령은 그룹방뿐 아니라 관리자의 1:1 DM에서도 동작한다.
+    // (관리자 여부는 handleCommand 안에서 판별)
     const replyText = await handleCommand(matched, event, env);
     console.log('[debug] handleCommand result =', JSON.stringify(replyText));
     if (replyText) {
       await replyMessage(env, event.replyToken, replyText);
     }
+    return;
+  }
+
+  // 마디 집계는 그룹방 활동만 대상으로 하므로, 명령어가 아닌 일반 메시지는
+  // 여기서부터 그룹 메시지만 처리한다.
+  if (source.type !== 'group') {
     return;
   }
 
