@@ -54,6 +54,11 @@ export async function handleCommand(command, event, env) {
     return '아직 메인방이 지정되지 않았어요. 메인방에서 !메인방 을 입력해주세요.';
   }
 
+  // 통계/순위는 메인방으로 지정된 방에서만 조회할 수 있음
+  if (source.type !== 'group' || source.groupId !== mainRoomId) {
+    return null; // 메인방이 아니면 아무 반응도 하지 않음
+  }
+
   const date = todayKST();
   const rows = await db.getDailyStats(env, mainRoomId, date);
 
