@@ -3,7 +3,7 @@ import { validateSignature, replyMessage, getGroupMemberDisplayName } from './li
 import { matchCommand, handleCommand } from './commands.js';
 import { getMainRoomId, incrementCount } from './db.js';
 import { todayKST } from './date.js';
-import { MIN_WORD_COUNT } from './config.js';
+import { MIN_CHAR_COUNT } from './config.js';
 
 const app = new Hono();
 
@@ -56,7 +56,7 @@ async function handleEvent(event, env) {
     return;
   }
 
-  // 일반 메시지 → 마디(어절) 수 계산 후, 이 방이 !메인방 또는 ?메인방으로
+  // 일반 메시지 → 글자 수(공백 포함) 계산 후, 이 방이 !메인방 또는 ?메인방으로
   // 지정된 방이라면 그에 맞는 집계에 반영한다.
   const bangMainRoomId = await getMainRoomId(env, '!');
   const questionMainRoomId = await getMainRoomId(env, '?');
@@ -69,10 +69,10 @@ async function handleEvent(event, env) {
     return; // 어느 쪽 메인방으로도 지정되지 않은 방은 집계하지 않음
   }
 
-  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-  console.log('[debug] wordCount =', wordCount, 'MIN_WORD_COUNT =', MIN_WORD_COUNT);
-  if (wordCount < MIN_WORD_COUNT) {
-    return; // 3마디 미만은 집계 제외
+  const charCount = text.trim().length; // 공백 포함, 앞뒤 공백만 제거
+  console.log('[debug] charCount =', charCount, 'MIN_CHAR_COUNT =', MIN_CHAR_COUNT);
+  if (charCount < MIN_CHAR_COUNT) {
+    return; // 3자 미만은 집계 제외
   }
 
   const displayName = await getGroupMemberDisplayName(env, source.groupId, source.userId);
