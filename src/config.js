@@ -9,7 +9,10 @@
 // "[event] message userId = Uxxxxxxxx..." 형태로 출력됩니다.
 export const ADMIN_USER_IDS = [
    'Ud1708743a23b5963b55f02664868c9f9',
-  // 'Uabcdef1234567890abcdef1234567890',
+   'U39d53e2eb89d5c011a7e5b699a2f6333',
+   'Ub98d82e3d9c3f93bb343043c1859c6bd',
+   'U73fe450a441183922e99fdc3ee689924',
+   'U8bcd29ea4335b6683b93da1de19c7793'
 ];
 
 // 발화로 인정하는 최소 글자 수(공백 포함) — "3마디 이상" 기준
