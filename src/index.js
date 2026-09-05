@@ -1,7 +1,15 @@
 import { Hono } from 'hono';
 import { validateSignature, replyMessage, getGroupMemberDisplayName } from './line.js';
 import { matchCommand, handleCommand } from './commands.js';
-import { getMainRoomId, incrementCount, deleteUserCounts } from './db.js';
+import { matchRouletteCommand, handleRouletteCommand } from './roulette.js';
+import {
+  getMainRoomId,
+  incrementCount,
+  deleteUserCounts,
+  isKnownUser,
+  upsertKnownUser,
+  deleteKnownUser,
+} from './db.js';
 import { todayKST } from './date.js';
 import { MIN_CHAR_COUNT } from './config.js';
 
@@ -42,7 +50,7 @@ async function handleEvent(event, env) {
       await Promise.all(
         leftMembers
           .filter((m) => m.userId)
-          .map((m) => deleteUserCounts(env, groupId, m.userId))
+          .flatMap((m) => [deleteUserCounts(env, groupId, m.userId), deleteKnownUser(env, groupId, m.userId)])
       );
     }
     return;
@@ -54,6 +62,18 @@ async function handleEvent(event, env) {
 
   const source = event.source;
   const text = event.message.text;
+
+  // 이 그룹에서 처음 보는 유저면 known_users에 기록해둔다.
+  // (LINE의 "그룹 멤버 전체 목록" API는 인증/프리미엄 계정만 쓸 수 있어서,
+  //  대신 봇이 실제로 관측한 유저를 여기 쌓아두고 !유저목록으로 보여준다)
+  if (source.type === 'group' && source.userId) {
+    const known = await isKnownUser(env, source.groupId, source.userId);
+    if (!known) {
+      const displayName = await getGroupMemberDisplayName(env, source.groupId, source.userId);
+      await upsertKnownUser(env, source.groupId, source.userId, displayName);
+    }
+  }
+
   const matched = matchCommand(text);
   console.log('[debug] text =', JSON.stringify(text), 'matched =', JSON.stringify(matched), 'source.type =', source.type);
 
@@ -62,6 +82,15 @@ async function handleEvent(event, env) {
     // (관리자 여부는 handleCommand 안에서 판별)
     const replyText = await handleCommand(matched, event, env);
     console.log('[debug] handleCommand result =', JSON.stringify(replyText));
+    if (replyText) {
+      await replyMessage(env, event.replyToken, replyText);
+    }
+    return;
+  }
+
+  const rouletteMatched = matchRouletteCommand(text);
+  if (rouletteMatched) {
+    const replyText = await handleRouletteCommand(rouletteMatched, event, env);
     if (replyText) {
       await replyMessage(env, event.replyToken, replyText);
     }
