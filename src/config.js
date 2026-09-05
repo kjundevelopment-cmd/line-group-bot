@@ -37,6 +37,6 @@ export const ROULETTE_CONFIRM_TTL_SECONDS = 60;
 export const ROULETTE_PRIZES = [
   { name: '🎉 1등 - 미클권', weight: 1 },
   { name: '🥈 2등 - 소환권', weight: 4 },
-  { name: '🥉 3등 - 티켓+1', weight: 15 },
-  { name: '😢 꽝 - 다음 기회에!', weight: 80 },
+  { name: '🥉 3등 - 티켓+1', weight: 45 },
+  { name: '😢 꽝 - 다음 기회에!', weight: 50 },
 ];
