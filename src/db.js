@@ -51,3 +51,177 @@ export async function deleteUserCounts(env, groupId, userId) {
     .bind(groupId, userId)
     .run();
 }
+
+// ============================================================
+// known_users — !유저목록 명령을 위해 "봇이 실제로 관측한 유저" 기록
+// ============================================================
+ 
+export async function isKnownUser(env, groupId, userId) {
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM known_users WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .first();
+  return !!row;
+}
+ 
+export async function upsertKnownUser(env, groupId, userId, displayName) {
+  await env.DB.prepare(
+    `INSERT INTO known_users (group_id, user_id, display_name)
+     VALUES (?, ?, ?)
+     ON CONFLICT(group_id, user_id) DO UPDATE SET display_name = excluded.display_name`
+  )
+    .bind(groupId, userId, displayName)
+    .run();
+}
+ 
+export async function getKnownUsers(env, groupId) {
+  const { results } = await env.DB.prepare(
+    `SELECT user_id, display_name FROM known_users WHERE group_id = ? ORDER BY display_name ASC`
+  )
+    .bind(groupId)
+    .all();
+  return results;
+}
+ 
+export async function deleteKnownUser(env, groupId, userId) {
+  await env.DB.prepare(
+    `DELETE FROM known_users WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .run();
+}
+ 
+// ============================================================
+// 포인트 룰렛(가차)
+// ============================================================
+ 
+export async function isRouletteActive(env, groupId) {
+  const row = await env.DB.prepare(
+    `SELECT active FROM roulette_events WHERE group_id = ?`
+  )
+    .bind(groupId)
+    .first();
+  return !!(row && row.active === 1);
+}
+ 
+/**
+ * 이벤트 시작 = 티켓 등록. 같은 유저가 다시 등록되면 이전 값을 덮어쓴다(새 이벤트 기준으로 초기화).
+ * entries: [{ userId, count }], displayNames: { [userId]: displayName }
+ */
+export async function registerRouletteTickets(env, groupId, entries, displayNames) {
+  await env.DB.prepare(
+    `INSERT INTO roulette_events (group_id, active, started_at, ended_at)
+     VALUES (?, 1, ?, NULL)
+     ON CONFLICT(group_id) DO UPDATE SET active = 1, started_at = excluded.started_at, ended_at = NULL`
+  )
+    .bind(groupId, new Date().toISOString())
+    .run();
+ 
+  for (const { userId, count } of entries) {
+    const displayName = (displayNames && displayNames[userId]) || userId;
+    await env.DB.prepare(
+      `INSERT INTO roulette_tickets (group_id, user_id, display_name, initial_count, remaining_count)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(group_id, user_id) DO UPDATE SET
+         display_name    = excluded.display_name,
+         initial_count   = excluded.initial_count,
+         remaining_count = excluded.remaining_count`
+    )
+      .bind(groupId, userId, displayName, count, count)
+      .run();
+  }
+}
+ 
+export async function getRemainingTickets(env, groupId, userId) {
+  const row = await env.DB.prepare(
+    `SELECT remaining_count FROM roulette_tickets WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .first();
+  return row ? row.remaining_count : 0;
+}
+ 
+export async function setPendingDraw(env, groupId, userId, cost, expiresAt) {
+  await env.DB.prepare(
+    `INSERT INTO roulette_pending (group_id, user_id, cost, expires_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(group_id, user_id) DO UPDATE SET cost = excluded.cost, expires_at = excluded.expires_at`
+  )
+    .bind(groupId, userId, cost, expiresAt)
+    .run();
+}
+ 
+export async function getPendingDraw(env, groupId, userId) {
+  return await env.DB.prepare(
+    `SELECT cost, expires_at FROM roulette_pending WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .first();
+}
+ 
+export async function clearPendingDraw(env, groupId, userId) {
+  await env.DB.prepare(
+    `DELETE FROM roulette_pending WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .run();
+}
+ 
+export async function consumeTicketsAndDraw(env, groupId, userId, displayName, cost, prizeName) {
+  await env.DB.prepare(
+    `UPDATE roulette_tickets SET remaining_count = remaining_count - ?
+     WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(cost, groupId, userId)
+    .run();
+ 
+  await env.DB.prepare(
+    `INSERT INTO roulette_draws (group_id, user_id, display_name, prize_name, drawn_at)
+     VALUES (?, ?, ?, ?, ?)`
+  )
+    .bind(groupId, userId, displayName, prizeName, new Date().toISOString())
+    .run();
+}
+ 
+/**
+ * 이벤트 종료: active를 끄고, 이번 이벤트 동안의 소모 티켓/당첨 내역을 집계해서 반환한다.
+ */
+export async function endRouletteEvent(env, groupId) {
+  const eventRow = await env.DB.prepare(
+    `SELECT started_at FROM roulette_events WHERE group_id = ?`
+  )
+    .bind(groupId)
+    .first();
+  const startedAt = eventRow ? eventRow.started_at : null;
+ 
+  await env.DB.prepare(
+    `UPDATE roulette_events SET active = 0, ended_at = ? WHERE group_id = ?`
+  )
+    .bind(new Date().toISOString(), groupId)
+    .run();
+ 
+  const { results: tickets } = await env.DB.prepare(
+    `SELECT user_id, display_name, initial_count, remaining_count
+     FROM roulette_tickets
+     WHERE group_id = ?
+     ORDER BY (initial_count - remaining_count) DESC`
+  )
+    .bind(groupId)
+    .all();
+ 
+  let draws = [];
+  if (startedAt) {
+    const result = await env.DB.prepare(
+      `SELECT user_id, display_name, prize_name
+       FROM roulette_draws
+       WHERE group_id = ? AND drawn_at >= ?
+       ORDER BY drawn_at ASC`
+    )
+      .bind(groupId, startedAt)
+      .all();
+    draws = result.results;
+  }
+ 
+  return { tickets, draws };
+}
