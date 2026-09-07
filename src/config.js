@@ -26,7 +26,7 @@ export const RANKING_TOP_N = 3;
 // ============================================================
  
 // 룰렛 1회 실행에 소모되는 티켓 수
-export const ROULETTE_TICKET_COST = 1;
+export const ROULETTE_TICKET_COST = 3;
  
 // "/룰렛" 입력 후 "/네"로 확인해야 하는 제한시간(초). 이 시간이 지나면 자동 취소됩니다.
 export const ROULETTE_CONFIRM_TTL_SECONDS = 60;
@@ -37,6 +37,7 @@ export const ROULETTE_CONFIRM_TTL_SECONDS = 60;
 export const ROULETTE_PRIZES = [
   { name: '🎉 1등 - 미클권', weight: 1 },
   { name: '🥈 2등 - 소환권', weight: 4 },
-  { name: '🥉 3등 - 티켓+1', weight: 45 },
-  { name: '😢 꽝 - 다음 기회에!', weight: 50 },
+  { name: '🥉 3등 - 블라인드권', weight: 25 },
+  { name: '4등 - 클로버', weight: 50 },
+  { name: '😢 꽝 - 다음 기회에!', weight: 20 },
 ];
