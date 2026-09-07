@@ -22,13 +22,18 @@ function formatRanking(rows, topN) {
     .join('\n');
 }
 
+function formatUserList(users) {
+  if (users.length === 0) return '아직 이 방에서 대화한 유저가 없어요.';
+  return users.map((u) => `${u.display_name || u.user_id} : ${u.user_id}`).join('\n');
+}
+
 /**
- * 텍스트가 !통계/!메인방/!순위/?통계/?메인방/?순위 중 하나인지 판별.
+ * 텍스트가 !통계/!메인방/!순위/!유저목록/?통계/?메인방/?순위/?유저목록 중 하나인지 판별.
  * '!'와 '?'는 서로 완전히 독립된 메인방을 가리키는 별개의 명령 체계다.
- * @returns {{prefix: '!'|'?', command: '통계'|'메인방'|'순위'} | null}
+ * @returns {{prefix: '!'|'?', command: '통계'|'메인방'|'순위'|'유저목록'} | null}
  */
 export function matchCommand(text) {
-  const m = text.trim().match(/^([!?])(통계|메인방|순위)$/);
+  const m = text.trim().match(/^([!?])(통계|메인방|순위|유저목록)$/);
   if (!m) return null;
   return { prefix: m[1], command: m[2] };
 }
@@ -70,6 +75,12 @@ export async function handleCommand(matched, event, env) {
   }
 
   const date = todayKST();
+
+  if (command === '유저목록') {
+    const users = await db.getKnownUsers(env, mainRoomId);
+    return `[${prefix} 메인방 유저 목록]\n${formatUserList(users)}`;
+  }
+
   const rows = await db.getDailyStats(env, mainRoomId, date);
 
   if (command === '통계') {
