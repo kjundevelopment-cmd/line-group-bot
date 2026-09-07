@@ -62,12 +62,16 @@ export function matchRouletteCommand(text) {
 }
 
 /**
- * 이벤트 종료 정산 — 사람별로 "몇 장 소모 → 받을 상품"만 간단히 보여준다.
- * "꽝"은 실제로 수령할 상품이 아니므로 목록에서 제외한다 (소모 티켓 수에는 포함됨).
+ * 이벤트 종료 정산 — "실제로 참여한(티켓을 1장이라도 소모한) 사람"만,
+ * "몇 장 소모 → 받을 상품" 형태로 보여준다.
+ * 티켓만 등록해두고 한 번도 참여하지 않은 사람은 목록에서 제외된다.
+ * "꽝"은 실제로 수령할 상품이 아니므로 상품 목록에서 제외한다 (소모 티켓 수에는 포함됨).
  */
 function formatEventSummary(tickets, draws) {
-  if (tickets.length === 0) {
-    return '[이벤트 종료 정산]\n기록 없음';
+  const participated = tickets.filter((t) => t.initial_count - t.remaining_count > 0);
+
+  if (participated.length === 0) {
+    return '[이벤트 종료 정산]\n참여한 사람이 없어요.';
   }
 
   const prizesByUser = new Map(); // userId -> Map<prizeName, count>
@@ -80,7 +84,7 @@ function formatEventSummary(tickets, draws) {
     counts.set(d.prize_name, (counts.get(d.prize_name) || 0) + 1);
   }
 
-  const lines = tickets.map((t) => {
+  const lines = participated.map((t) => {
     const consumed = t.initial_count - t.remaining_count;
     const counts = prizesByUser.get(t.user_id);
     const prizeText =
