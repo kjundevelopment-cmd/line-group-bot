@@ -58,3 +58,10 @@ CREATE TABLE IF NOT EXISTS roulette_pending (
   expires_at TEXT NOT NULL,
   PRIMARY KEY (group_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS message_authors (
+  message_id TEXT PRIMARY KEY,
+  group_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
