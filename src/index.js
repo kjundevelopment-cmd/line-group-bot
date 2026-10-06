@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
-import { validateSignature, replyMessage, getGroupMemberDisplayName } from './line.js';
-import { matchCommand, handleCommand, matchCheckCommand, handleCheckCommand } from './commands.js';
+import { validateSignature, replyMessage, replyMessages, getGroupMemberDisplayName } from './line.js';
+import { matchCommand, handleCommand, matchCheckCommand, handleCheckCommand, matchMentionCommand, handleMentionCommand } from './commands.js';
 import { matchRouletteCommand, handleRouletteCommand } from './roulette.js';
 import {
   getMainRoomId,
   incrementCount,
   saveMessageAuthor,
+  refreshKnownUserName,
   deleteUserCounts,
   isKnownUser,
   upsertKnownUser,
@@ -89,6 +90,17 @@ async function handleEvent(event, env) {
     return;
   }
 
+  const mentionMatched = matchMentionCommand(text);
+  if (mentionMatched) {
+    const result = await handleMentionCommand(mentionMatched, event, env);
+    if (result && result.messages) {
+      await replyMessages(env, event.replyToken, result.messages);
+    } else if (result && result.text) {
+      await replyMessage(env, event.replyToken, result.text);
+    }
+    return;
+  }
+
   if (matchCheckCommand(text)) {
     const replyText = await handleCheckCommand(event, env);
     if (replyText) {
@@ -141,6 +153,8 @@ async function handleEvent(event, env) {
   const displayName = await getGroupMemberDisplayName(env, source.groupId, source.userId);
   console.log('[debug] incrementCount 호출 →', source.groupId, source.userId, displayName, todayKST());
   await incrementCount(env, source.groupId, source.userId, displayName, todayKST());
+  // 이름이 바뀐 경우에만 known_users 이름도 갱신 (!멘션이 최신 이름으로 찾도록)
+  await refreshKnownUserName(env, source.groupId, source.userId, displayName);
   console.log('[debug] incrementCount 완료');
 }
 
