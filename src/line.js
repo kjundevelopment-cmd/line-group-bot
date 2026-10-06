@@ -60,8 +60,11 @@ export async function replyMessages(env, replyToken, messages) {
     body: JSON.stringify({ replyToken, messages: messages.slice(0, 5) }),
   });
   if (!res.ok) {
-    console.error('replyMessages 실패:', res.status, await res.text());
+    const body = await res.text();
+    console.error('replyMessages 실패:', res.status, body);
+    return { ok: false, status: res.status, body };
   }
+  return { ok: true };
 }
 
 /**
