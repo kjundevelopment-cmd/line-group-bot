@@ -1,6 +1,7 @@
 import { ADMIN_USER_IDS, RANKING_TOP_N } from './config.js';
 import { todayKST } from './date.js';
 import * as db from './db.js';
+import { getGroupMemberStatus } from './line.js';
 
 export function isAdmin(userId) {
   return ADMIN_USER_IDS.includes(userId);
@@ -143,6 +144,7 @@ const MENTION_GROUPS = {
 };
 
 const MENTIONS_PER_MESSAGE = 20; // 말풍선 하나에 넣는 멘션 수(안전하게 20명씩)
+const MAX_VERIFY = 40; // 멘션 전 방 멤버 확인은 한 번에 최대 40명 (무료 플랜 외부 호출 한도 50 대비)
 const MAX_MESSAGES_PER_REPLY = 5; // LINE 회신 1번에 보낼 수 있는 말풍선 수
 
 export function matchMentionCommand(text) {
@@ -185,8 +187,37 @@ export async function handleMentionCommand(matched, event, env) {
     };
   }
 
+  // LINE은 멘션 대상 중 "방에 없는 사람"이 한 명이라도 섞이면 메시지 전체를 거부한다.
+  // 그래서 보내기 직전에 한 명씩 지금도 방에 있는지, 현재 이름에 이모티콘이 있는지 확인한다.
+  const checked = await Promise.all(
+    targets.slice(0, MAX_VERIFY).map(async (u) => ({
+      u,
+      s: await getGroupMemberStatus(env, source.groupId, u.user_id),
+    }))
+  );
+  const apiWorks = checked.some((x) => x.s.status === 'ok');
+  const valid = [];
+  for (const { u, s } of checked) {
+    if (s.status === 'gone') {
+      // 방을 나간 사람 → 목록에서 제거 (API가 정상 응답하는 경우에만 안전하게 삭제)
+      if (apiWorks) await db.deleteKnownUser(env, source.groupId, u.user_id);
+    } else if (s.status === 'ok') {
+      if (s.displayName !== u.display_name) {
+        await db.refreshKnownUserName(env, source.groupId, u.user_id, s.displayName);
+      }
+      if (s.displayName.includes(emoji)) valid.push(u);
+    } else {
+      valid.push(u); // 확인 실패(일시 오류)면 기존 정보를 믿고 포함
+    }
+  }
+  console.log('[mention] verified valid =', valid.length, 'of', checked.length);
+
+  if (valid.length === 0) {
+    return { text: `이름에 ${emoji}가 들어간 멤버를 찾지 못했어요. (방을 나갔거나 이름이 바뀐 멤버는 제외됐어요)` };
+  }
+
   const limit = MENTIONS_PER_MESSAGE * MAX_MESSAGES_PER_REPLY;
-  const picked = targets.slice(0, limit);
+  const picked = valid.slice(0, limit);
 
   const messages = [];
   for (let i = 0; i < picked.length; i += MENTIONS_PER_MESSAGE) {
@@ -205,8 +236,8 @@ export async function handleMentionCommand(matched, event, env) {
     });
   }
 
-  if (targets.length > limit) {
-    messages[messages.length - 1].text += `\n(※ 대상 ${targets.length}명 중 ${limit}명만 멘션됨)`;
+  if (targets.length > MAX_VERIFY) {
+    messages[messages.length - 1].text += `\n(※ 대상 ${targets.length}명 중 ${MAX_VERIFY}명까지만 멘션됨)`;
   }
   return { messages };
 }
