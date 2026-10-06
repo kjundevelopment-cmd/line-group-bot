@@ -84,3 +84,22 @@ export async function getGroupMemberDisplayName(env, groupId, userId) {
     return userId;
   }
 }
+
+/**
+ * 멘션 직전 검증용: 이 사람이 지금도 그룹에 있는지, 현재 이름이 뭔지 확인한다.
+ * 404면 이미 방을 나간 사람('gone'), 그 외 오류는 판단 보류('error').
+ */
+export async function getGroupMemberStatus(env, groupId, userId) {
+  try {
+    const res = await fetch(
+      `https://api.line.me/v2/bot/group/${groupId}/member/${userId}`,
+      { headers: { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` } }
+    );
+    if (res.status === 404) return { status: 'gone' };
+    if (!res.ok) return { status: 'error' };
+    const profile = await res.json();
+    return { status: 'ok', displayName: profile.displayName };
+  } catch (err) {
+    return { status: 'error' };
+  }
+}
