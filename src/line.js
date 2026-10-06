@@ -48,6 +48,23 @@ export async function replyMessage(env, replyToken, text) {
 }
 
 /**
+ * 메시지 객체(text, textV2 등)를 그대로 회신한다. (최대 5개)
+ */
+export async function replyMessages(env, replyToken, messages) {
+  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({ replyToken, messages: messages.slice(0, 5) }),
+  });
+  if (!res.ok) {
+    console.error('replyMessages 실패:', res.status, await res.text());
+  }
+}
+
+/**
  * 그룹 멤버 프로필(표시 이름) 조회. 실패 시 userId를 그대로 반환.
  */
 export async function getGroupMemberDisplayName(env, groupId, userId) {
