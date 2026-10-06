@@ -132,15 +132,15 @@ export async function handleCheckCommand(event, env) {
 }
 
 // ============================================================
-// !멘션 / ?멘션 — 이름에 특정 이모티콘이 들어간 멤버들을 한꺼번에 멘션
+// /멘션 — 이름에 특정 이모티콘이 들어간 멤버들을 한꺼번에 멘션
 // ============================================================
 
-// 그룹 이름 → 이름에 들어 있어야 하는 이모티콘
+// 그룹 이름 → 이름에 "하나라도" 들어 있으면 대상이 되는 이모티콘들
 // (🐿️ 는 뒤에 보이지 않는 보조 문자가 붙을 수 있어서 기본 문자만 비교한다)
 const MENTION_GROUPS = {
-  노미클: '🪨',
-  미클: '🪵',
-  여자: '\u{1F43F}',
+  노미클: ['🪨', '🌱'],
+  미클: ['🪵', '🐝'],
+  여자: ['\u{1F43F}', '🌷'],
 };
 
 const MENTIONS_PER_MESSAGE = 20; // 말풍선 하나에 넣는 멘션 수(안전하게 20명씩)
@@ -148,9 +148,9 @@ const MAX_VERIFY = 40; // 멘션 전 방 멤버 확인은 한 번에 최대 40�
 const MAX_MESSAGES_PER_REPLY = 5; // LINE 회신 1번에 보낼 수 있는 말풍선 수
 
 export function matchMentionCommand(text) {
-  const m = text.trim().match(/^([!?])(?:멘션|맨션)(확인)?\s+(노미클|미클|여자)(?:\s+([\s\S]+))?$/);
+  const m = text.trim().match(/^\/(?:멘션|맨션)(확인)?\s+(노미클|미클|여자)(?:\s+([\s\S]+))?$/);
   if (!m) return null;
-  return { prefix: m[1], preview: !!m[2], group: m[3], message: (m[4] || '').trim() };
+  return { preview: !!m[1], group: m[2], message: (m[3] || '').trim() };
 }
 
 /**
@@ -162,9 +162,11 @@ export async function handleMentionCommand(matched, event, env) {
   if (!isAdmin(source.userId)) return null; // 관리자만
   if (source.type !== 'group') return null;
 
-  const emoji = MENTION_GROUPS[matched.group];
+  const emojis = MENTION_GROUPS[matched.group];
+  const hasEmoji = (name) => !!name && emojis.some((e) => name.includes(e));
+  const emojiLabel = emojis.join('');
   const users = await db.getKnownUsers(env, source.groupId);
-  const targets = users.filter((u) => u.display_name && u.display_name.includes(emoji));
+  const targets = users.filter((u) => hasEmoji(u.display_name));
 
   // "!멘션확인 여자" — 멘션은 하지 않고, 대상으로 잡힌 멤버 이름만 보여준다. (점검용)
   if (matched.preview) {
@@ -181,7 +183,7 @@ export async function handleMentionCommand(matched, event, env) {
   if (targets.length === 0) {
     return {
       text:
-        `이름에 ${emoji}가 들어간 멤버를 찾지 못했어요.\n` +
+        `이름에 ${emojiLabel}가 들어간 멤버를 찾지 못했어요.\n` +
         `(봇이 이 방에서 대화를 본 멤버 ${users.length}명 중 해당 이모티콘이 이름에 있는 사람이 없어요. ` +
         `한 번도 말하지 않은 멤버는 찾을 수 없어요)`,
     };
@@ -205,7 +207,7 @@ export async function handleMentionCommand(matched, event, env) {
       if (s.displayName !== u.display_name) {
         await db.refreshKnownUserName(env, source.groupId, u.user_id, s.displayName);
       }
-      if (s.displayName.includes(emoji)) valid.push(u);
+      if (hasEmoji(s.displayName)) valid.push(u);
     } else {
       valid.push(u); // 확인 실패(일시 오류)면 기존 정보를 믿고 포함
     }
@@ -213,7 +215,7 @@ export async function handleMentionCommand(matched, event, env) {
   console.log('[mention] verified valid =', valid.length, 'of', checked.length);
 
   if (valid.length === 0) {
-    return { text: `이름에 ${emoji}가 들어간 멤버를 찾지 못했어요. (방을 나갔거나 이름이 바뀐 멤버는 제외됐어요)` };
+    return { text: `이름에 ${emojiLabel}가 들어간 멤버를 찾지 못했어요. (방을 나갔거나 이름이 바뀐 멤버는 제외됐어요)` };
   }
 
   const limit = MENTIONS_PER_MESSAGE * MAX_MESSAGES_PER_REPLY;
