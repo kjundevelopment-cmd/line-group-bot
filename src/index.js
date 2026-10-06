@@ -58,6 +58,19 @@ async function handleEvent(event, env) {
     return;
   }
 
+  // 새로 들어온 멤버도 말하기 전에 미리 기록해둔다. (!멘션 대상에 포함되도록)
+  if (event.type === 'memberJoined') {
+    const groupId = event.source && event.source.groupId;
+    const joined = (event.joined && event.joined.members) || [];
+    if (groupId) {
+      for (const m of joined.filter((x) => x.userId)) {
+        const name = await getGroupMemberDisplayName(env, groupId, m.userId);
+        await upsertKnownUser(env, groupId, m.userId, name);
+      }
+    }
+    return;
+  }
+
   if (event.type !== 'message' || event.message.type !== 'text') {
     return;
   }
@@ -94,7 +107,15 @@ async function handleEvent(event, env) {
   if (mentionMatched) {
     const result = await handleMentionCommand(mentionMatched, event, env);
     if (result && result.messages) {
-      await replyMessages(env, event.replyToken, result.messages);
+      const sent = await replyMessages(env, event.replyToken, result.messages);
+      if (sent && !sent.ok) {
+        // 멘션 메시지를 LINE이 거부한 경우, 관리자가 원인을 볼 수 있게 알려준다.
+        await replyMessage(
+          env,
+          event.replyToken,
+          `⚠️ 멘션 메시지 전송 실패 (${sent.status})\n${String(sent.body).slice(0, 300)}`
+        );
+      }
     } else if (result && result.text) {
       await replyMessage(env, event.replyToken, result.text);
     }
