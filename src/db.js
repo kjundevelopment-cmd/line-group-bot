@@ -165,6 +165,29 @@ export async function registerRouletteTickets(env, groupId, entries, displayName
 }
 
 /**
+ * 이벤트 진행 중에 추가로 티켓을 지급한다. registerRouletteTickets와 달리
+ * 기존 값을 덮어쓰지 않고 initial_count/remaining_count에 그대로 "더한다".
+ * (초기값+지급분 = initial_count 로 유지되어야 나중에 "소모량 = initial - remaining"
+ *  계산이 계속 정확하게 맞기 때문에 remaining_count만 더하지 않고 둘 다 더한다.)
+ * entries: [{ userId, count }], displayNames: { [userId]: displayName }
+ */
+export async function addRouletteTickets(env, groupId, entries, displayNames) {
+  for (const { userId, count } of entries) {
+    const displayName = (displayNames && displayNames[userId]) || userId;
+    await env.DB.prepare(
+      `INSERT INTO roulette_tickets (group_id, user_id, display_name, initial_count, remaining_count)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(group_id, user_id) DO UPDATE SET
+         display_name    = excluded.display_name,
+         initial_count   = roulette_tickets.initial_count + excluded.initial_count,
+         remaining_count = roulette_tickets.remaining_count + excluded.remaining_count`
+    )
+      .bind(groupId, userId, displayName, count, count)
+      .run();
+  }
+}
+
+/**
  * !이벤트시작 — 이 시점부터 "/룰렛" 참여가 가능해진다.
  */
 export async function startRouletteEvent(env, groupId) {
@@ -214,10 +237,10 @@ export async function clearPendingDraw(env, groupId, userId) {
 
 export async function consumeTicketsAndDraw(env, groupId, userId, displayName, cost, prizeName) {
   await env.DB.prepare(
-    `UPDATE roulette_tickets SET remaining_count = remaining_count - ?
+    `UPDATE roulette_tickets SET remaining_count = remaining_count - ?, display_name = ?
      WHERE group_id = ? AND user_id = ?`
   )
-    .bind(cost, groupId, userId)
+    .bind(cost, displayName, groupId, userId)
     .run();
 
   await env.DB.prepare(
@@ -246,10 +269,14 @@ export async function endRouletteEvent(env, groupId) {
     .run();
 
   const { results: tickets } = await env.DB.prepare(
-    `SELECT user_id, display_name, initial_count, remaining_count
-     FROM roulette_tickets
-     WHERE group_id = ?
-     ORDER BY (initial_count - remaining_count) DESC`
+    `SELECT rt.user_id,
+            COALESCE(ku.display_name, rt.display_name) AS display_name,
+            rt.initial_count,
+            rt.remaining_count
+     FROM roulette_tickets rt
+     LEFT JOIN known_users ku ON ku.group_id = rt.group_id AND ku.user_id = rt.user_id
+     WHERE rt.group_id = ?
+     ORDER BY (rt.initial_count - rt.remaining_count) DESC`
   )
     .bind(groupId)
     .all();
@@ -268,4 +295,53 @@ export async function endRouletteEvent(env, groupId) {
   }
 
   return { tickets, draws };
+}
+
+// ============================================================
+// /체크 — "누가 쓴 메시지인지" 기억해두는 임시 기록 (최근 이틀치만 보관)
+// ============================================================
+
+const MESSAGE_AUTHOR_KEEP_MS = 2 * 24 * 60 * 60 * 1000;
+
+export async function saveMessageAuthor(env, groupId, messageId, userId) {
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO message_authors (message_id, group_id, user_id, created_at)
+     VALUES (?, ?, ?, ?)`
+  )
+    .bind(messageId, groupId, userId, Date.now())
+    .run();
+
+  // 매 메시지마다 지우면 쓰기 횟수가 늘어나므로 가끔(약 1%)만 오래된 기록을 정리한다.
+  if (Math.random() < 0.01) {
+    await env.DB.prepare(`DELETE FROM message_authors WHERE created_at < ?`)
+      .bind(Date.now() - MESSAGE_AUTHOR_KEEP_MS)
+      .run();
+  }
+}
+
+export async function getMessageAuthor(env, groupId, messageId) {
+  const row = await env.DB.prepare(
+    `SELECT user_id FROM message_authors WHERE group_id = ? AND message_id = ?`
+  )
+    .bind(groupId, messageId)
+    .first();
+  return row ? row.user_id : null;
+}
+
+export async function getUserDailyCount(env, groupId, userId, date) {
+  return await env.DB.prepare(
+    `SELECT display_name, message_count FROM daily_counts
+     WHERE group_id = ? AND user_id = ? AND date = ?`
+  )
+    .bind(groupId, userId, date)
+    .first();
+}
+
+export async function getKnownUserName(env, groupId, userId) {
+  const row = await env.DB.prepare(
+    `SELECT display_name FROM known_users WHERE group_id = ? AND user_id = ?`
+  )
+    .bind(groupId, userId)
+    .first();
+  return row ? row.display_name : null;
 }
