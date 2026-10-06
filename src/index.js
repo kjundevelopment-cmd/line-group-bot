@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { validateSignature, replyMessage, getGroupMemberDisplayName } from './line.js';
-import { matchCommand, handleCommand } from './commands.js';
+import { matchCommand, handleCommand, matchCheckCommand, handleCheckCommand } from './commands.js';
 import { matchRouletteCommand, handleRouletteCommand } from './roulette.js';
 import {
   getMainRoomId,
   incrementCount,
+  saveMessageAuthor,
   deleteUserCounts,
   isKnownUser,
   upsertKnownUser,
@@ -88,9 +89,19 @@ async function handleEvent(event, env) {
     return;
   }
 
+  if (matchCheckCommand(text)) {
+    const replyText = await handleCheckCommand(event, env);
+    if (replyText) {
+      await replyMessage(env, event.replyToken, replyText);
+    }
+    return;
+  }
+
   const rouletteMatched = matchRouletteCommand(text);
+  console.log('[debug] rouletteMatched =', JSON.stringify(rouletteMatched));
   if (rouletteMatched) {
     const replyText = await handleRouletteCommand(rouletteMatched, event, env);
+    console.log('[debug] handleRouletteCommand result =', JSON.stringify(replyText));
     if (replyText) {
       await replyMessage(env, event.replyToken, replyText);
     }
@@ -114,6 +125,11 @@ async function handleEvent(event, env) {
   console.log('[debug] isMonitoredRoom =', isMonitoredRoom);
   if (!isMonitoredRoom) {
     return; // 어느 쪽 메인방으로도 지정되지 않은 방은 집계하지 않음
+  }
+
+  // /체크용: 짧은 메시지도 인용될 수 있으므로 글자 수와 상관없이 작성자를 기록한다.
+  if (source.userId) {
+    await saveMessageAuthor(env, source.groupId, event.message.id, source.userId);
   }
 
   const charCount = text.trim().length; // 공백 포함, 앞뒤 공백만 제거
