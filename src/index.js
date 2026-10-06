@@ -107,15 +107,7 @@ async function handleEvent(event, env) {
   if (mentionMatched) {
     const result = await handleMentionCommand(mentionMatched, event, env);
     if (result && result.messages) {
-      const sent = await replyMessages(env, event.replyToken, result.messages);
-      if (sent && !sent.ok) {
-        // 멘션 메시지를 LINE이 거부한 경우, 관리자가 원인을 볼 수 있게 알려준다.
-        await replyMessage(
-          env,
-          event.replyToken,
-          `⚠️ 멘션 메시지 전송 실패 (${sent.status})\n${String(sent.body).slice(0, 300)}`
-        );
-      }
+      await replyMessages(env, event.replyToken, result.messages);
     } else if (result && result.text) {
       await replyMessage(env, event.replyToken, result.text);
     }
