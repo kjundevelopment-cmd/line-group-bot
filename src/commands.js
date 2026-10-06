@@ -93,3 +93,39 @@ export async function handleCommand(matched, event, env) {
 
   return null;
 }
+
+/**
+ * "/체크" — 누군가의 메시지에 답장(인용)하며 입력하면 그 사람의 오늘 마디수를 알려준다.
+ */
+export function matchCheckCommand(text) {
+  return text.trim() === '/체크';
+}
+
+export async function handleCheckCommand(event, env) {
+  const source = event.source;
+  if (!isAdmin(source.userId)) return null; // 관리자만 (다른 명령과 동일)
+  if (source.type !== 'group') return null;
+
+  // 메인방(! 또는 ?)으로 지정된 방에서만 동작
+  const bangRoom = await db.getMainRoomId(env, '!');
+  const questionRoom = await db.getMainRoomId(env, '?');
+  if (source.groupId !== bangRoom && source.groupId !== questionRoom) return null;
+
+  const quotedId = event.message.quotedMessageId;
+  if (!quotedId) {
+    return '확인할 사람의 메시지에 답장(길게 눌러 답장)하면서 /체크 를 입력해주세요.';
+  }
+
+  const targetUserId = await db.getMessageAuthor(env, source.groupId, quotedId);
+  if (!targetUserId) {
+    return '그 메시지의 작성자를 찾지 못했어요. (기능 적용 이후에 올라온 최근 메시지만 확인할 수 있어요)';
+  }
+
+  const row = await db.getUserDailyCount(env, source.groupId, targetUserId, todayKST());
+  const name =
+    (row && row.display_name) ||
+    (await db.getKnownUserName(env, source.groupId, targetUserId)) ||
+    targetUserId;
+  const count = row ? row.message_count : 0;
+  return `${name} : ${count}마디`;
+}
