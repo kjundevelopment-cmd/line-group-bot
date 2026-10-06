@@ -345,3 +345,16 @@ export async function getKnownUserName(env, groupId, userId) {
     .first();
   return row ? row.display_name : null;
 }
+
+/**
+ * 이름이 바뀐 경우에만 known_users의 표시 이름을 갱신한다.
+ * (같은 값이면 WHERE 조건에 안 걸려서 쓰기가 발생하지 않는다)
+ */
+export async function refreshKnownUserName(env, groupId, userId, displayName) {
+  await env.DB.prepare(
+    `UPDATE known_users SET display_name = ?
+     WHERE group_id = ? AND user_id = ? AND display_name IS NOT ?`
+  )
+    .bind(displayName, groupId, userId, displayName)
+    .run();
+}
