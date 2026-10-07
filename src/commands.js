@@ -141,6 +141,9 @@ const MENTION_GROUPS = {
   노미클: ['🪨', '🌱'],
   미클: ['🪵', '🐝'],
   여자: ['🐿️', '🌷'],
+  운영진: ['🫧', '🍯', '🪄'],
+  관리진: ['👑', '💐', '⚔️'], // ⚔️ 는 기본 문자로 비교
+  단멀: ['✨'],
 };
 
 // /멘션, /멘션확인 을 관리자 외에 추가로 쓸 수 있는 사람들의 userId.
@@ -164,7 +167,7 @@ const MAX_VERIFY = 40; // 멘션 전 방 멤버 확인은 한 번에 최대 40�
 const MAX_MESSAGES_PER_REPLY = 5; // LINE 회신 1번에 보낼 수 있는 말풍선 수
 
 export function matchMentionCommand(text) {
-  const m = text.trim().match(/^\/(?:멘션|맨션)(확인)?\s+(노미클|미클|여자)(?:\s+([\s\S]+))?$/);
+  const m = text.trim().match(/^\/(?:멘션|맨션)(확인)?\s+(노미클|미클|여자|운영진|관리진|단멀)(?:\s+([\s\S]+))?$/);
   if (!m) return null;
   return { preview: !!m[1], group: m[2], message: (m[3] || '').trim() };
 }
