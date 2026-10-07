@@ -140,8 +140,24 @@ export async function handleCheckCommand(event, env) {
 const MENTION_GROUPS = {
   노미클: ['🪨', '🌱'],
   미클: ['🪵', '🐝'],
-  여자: ['\u{1F43F}', '🌷'],
+  여자: ['🐿️', '🌷'],
 };
+
+// /멘션, /멘션확인 을 관리자 외에 추가로 쓸 수 있는 사람들의 userId.
+// (관리자는 여기에 안 넣어도 항상 사용 가능) 예: 'U1234567890abcdef1234567890abcdef',
+const MENTION_ALLOWED_USER_IDS = [
+   'Uade55824d69b3ddde3c3725995f5d718',
+   'U8b49ba6456f5a2f930d732efe73dc99a',
+   'U638a6c9b4008bf30d2f8990ade3aded9',
+   'Ua3080e429006f22c52ddc7c01375c770',
+   'U7f4686feece3252b32755e940be9d016',
+   'U7b631883499e9f1dd910a427337de184',
+   'U0602811aea555928493548c88e675cdf'
+];
+
+function canUseMention(userId) {
+  return !!userId && (isAdmin(userId) || MENTION_ALLOWED_USER_IDS.includes(userId));
+}
 
 const MENTIONS_PER_MESSAGE = 20; // 말풍선 하나에 넣는 멘션 수(안전하게 20명씩)
 const MAX_VERIFY = 40; // 멘션 전 방 멤버 확인은 한 번에 최대 40명 (무료 플랜 외부 호출 한도 50 대비)
@@ -159,7 +175,7 @@ export function matchMentionCommand(text) {
  */
 export async function handleMentionCommand(matched, event, env) {
   const source = event.source;
-  if (!isAdmin(source.userId)) return null; // 관리자만
+  if (!canUseMention(source.userId)) return null; // 관리자 + 지정한 사용자만
   if (source.type !== 'group') return null;
 
   const emojis = MENTION_GROUPS[matched.group];
